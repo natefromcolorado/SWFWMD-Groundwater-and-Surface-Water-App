@@ -1,0 +1,93 @@
+# title: "SWFWMD Water Level Dashboard"
+# author: "Nathan Johnson"
+# date: "2016-02-09"
+# ui.R
+
+library(xtable)
+library(reshape2)
+library(htmltools)
+library(maptools)
+library(maps)
+library(mapproj)
+library(ROracle)
+library(shiny)
+library(dygraphs)
+library(xts)
+library(leaflet)
+library(rmarkdown)
+# library(shinyjs)
+
+# source("L:/Hydro Eval/Staff/Nathan/R/scripts/functions/packageLoad.R")
+# packageLoad(c("shiny", "dygraphs", "xts", "leaflet")) # usdm for vif
+# input <- data.frame(hydrologicType = c("Well","River/Stream","Estuary", "Canal"))
+# extendShinyjs
+# initialStationSelect <- data.frame("25282")
+# names(initialStationSelect) = c("25282 - LAKE STARR")
+
+shinyUI(fluidPage(
+  
+  div(tags$header(
+    tags$img(src="colorSealTransparent.png", height=70, width=70, style ="display:inline-block"),
+    tags$h2("SWFWMD Groundwater and Surface Water App", style ="display:inline-block"),
+    tags$a(href = "https://www.youtube.com/watch?v=UVuB4zHpH6E", "Tutorial")
+  )),
+  br(),
+  
+  sidebarLayout(
+    sidebarPanel(
+      # uiOutput("hydrologicType"),
+      # checkboxGroupInput("hydrologicType",
+      #                    label = "Hydrologic Type",
+      #                    choices = c("Well", "Lake", "Wetland", "River/Stream","Estuary", "Canal", "Retention Pond", "Borrow Pit", "Sinkhole", "Reservoir","Spring not in Vent", "Lake Outflow"),
+      #                    selected = c("Well","River/Stream","Estuary", "Canal")
+      #                    ),
+      
+      radioButtons('datum', 'Hydrologic Variable', c('Level (NGVD29)', 'Level (NAVD88)', 'Flow'),
+                   inline = TRUE),
+      uiOutput("stationList"),
+      uiOutput("inCheckboxGroup"),
+      # Set the label, choices, and selected item but don't need this
+      # uiOutput("checkedStations"),
+      
+      # checkboxGroupInput("inCheckboxGroup",
+      #                    label = "Displayed Stations",
+      #                    choices = "", # choices = initialStationSelect, #"25282 - LAKE STARR",
+      #                    selected = ""),# selected = "25282"), #as.numeric(initialStationSelect)), 
+      
+      
+      # div(style="display:inline-block",submitButton("Submit")),
+      actionButton("submitButton","Submit", style = "display:inline-block; color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+      br(),
+      br(),
+      br(),
+      br(),
+      h3("Downloads"),
+      
+      dateRangeInput("dates", 
+                     label = NULL,
+                     start = "1920-01-01", 
+                     end = as.character(Sys.Date())),
+      # div(style="display:inline-block",submitButton("Submit Report Settings")),
+      div(style="display:inline-block",downloadButton('downloadData', 'Download Data')),
+      # radioButtons('format', NULL, c('PDF','Word'), #, 'HTML', ),
+                   # inline = TRUE),
+      div(style="display:inline-block; float: right; margin: 3px 0 10px 10px", radioButtons('format', NULL, c('PDF','Word'), inline = TRUE)), #, 'HTML', ),
+      div(style="display:inline-block; float: right", downloadButton('downloadReport', 'Download Report')),
+      br()
+    ),
+    
+    mainPanel(
+      tabsetPanel(
+        #         tabPanel('Hydrograph', plotOutput("plot")), #,dataTableOutput("dt")
+        tabPanel('Time Series', br(), dygraphOutput("dygraph"),
+                 dataTableOutput("dt")),
+        # tabPanel('Map', leafletOutput('myMap', height = "700px")), #removed this because we can't do leafletProxy with current server
+        tabPanel('Map', leafletOutput('mymap', height = "700px"), dataTableOutput("site")),
+        tabPanel('Search Stations', dataTableOutput('fulldt'))
+        # tabPanel('Tutorial', HTML('<iframe width="700" height="500" src="https://www.youtube.com/embed/UVuB4zHpH6E" frameborder="0" allowfullscreen></iframe>'))
+        # tabPanel('ScatterPlot', plotOutput("scatter", height = "400px"), dataTableOutput("corMatrix"))
+      )
+    )
+  )
+)
+)
