@@ -12,7 +12,7 @@
 # LEFT JOIN sites_edit se ON  s.site_id = se.site_id ; 
 # This will work
 # You will still need to join to sites_edit which is a GIS table that has the latitude and long info.
-## made some changes
+## here are some more changes
 
 library(xtable)
 library(reshape2)

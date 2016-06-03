@@ -40,12 +40,12 @@ shinyUI(fluidPage(
       #                    label = "Hydrologic Type",
       #                    choices = c("Well", "Lake", "Wetland", "River/Stream","Estuary", "Canal", "Retention Pond", "Borrow Pit", "Sinkhole", "Reservoir","Spring not in Vent", "Lake Outflow"),
       #                    selected = c("Well","River/Stream","Estuary", "Canal")
-      #                    ),
+      #                    ), # did not use this because the dbquery() function converts to all caps. Oracle stores these in sentence case. Not sure how to get around this other than to change
       
       radioButtons('datum', 'Hydrologic Variable', c('Level (NGVD29)', 'Level (NAVD88)', 'Flow'),
                    inline = TRUE),
-      uiOutput("stationList"),
-      uiOutput("inCheckboxGroup"),
+      uiOutput("stationList"), # use the uiOutput function because tableDT() cannot be passed to the UI
+      uiOutput("inCheckboxGroup"), # use the uiOutput function because tableDT() cannot be passed to the UI
       # Set the label, choices, and selected item but don't need this
       # uiOutput("checkedStations"),
       
@@ -56,7 +56,7 @@ shinyUI(fluidPage(
       
       
       # div(style="display:inline-block",submitButton("Submit")),
-      actionButton("submitButton","Submit", style = "display:inline-block; color: #fff; background-color: #337ab7; border-color: #2e6da4"),
+      actionButton("submitButton","Submit", style = "display:inline-block; color: #fff; background-color: #337ab7; border-color: #2e6da4"), # creates button in HTML
       br(),
       br(),
       br(),
@@ -71,7 +71,7 @@ shinyUI(fluidPage(
       div(style="display:inline-block",downloadButton('downloadData', 'Download Data')),
       # radioButtons('format', NULL, c('PDF','Word'), #, 'HTML', ),
                    # inline = TRUE),
-      div(style="display:inline-block; float: right; margin: 3px 0 10px 10px", radioButtons('format', NULL, c('PDF','Word'), inline = TRUE)), #, 'HTML', ),
+      div(style="display:inline-block; float: right; margin: 3px 0 10px 10px", radioButtons('format', NULL, c('PDF','Word'), inline = TRUE)), #, 'HTML', ), # creates button in HTML
       div(style="display:inline-block; float: right", downloadButton('downloadReport', 'Download Report')),
       br()
     ),

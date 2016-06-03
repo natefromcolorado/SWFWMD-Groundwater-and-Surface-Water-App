@@ -1,0 +1,94 @@
+---
+output:
+pdf_document:
+fig_caption: FALSE
+header-includes:
+- \usepackage{fancyhdr}
+- \pagestyle{fancy}
+- \fancyheadoffset{0.0cm}
+- \fancyhead[C]{\textit{Hydrologic Daily Data Station Report}}
+- \renewcommand{\footrulewidth}{0.4pt}% default is 0pt
+- \fancyfoot[RO,LE]{\thepage}
+- \fancyfoot[C]{\textit{Southwest Florida Water Management District}}
+- \renewcommand{\maketitle}{\par}
+linkcolor: blue
+---
+
+HYDROLOGIC DAILY DATA STATION REPORT  
+SWFWMD - Bureau of Water Resources  
+GENERATED: `r format(Sys.time(), "%B %d, %Y")`  
+\
+
+```{r, include=FALSE}
+# plotData <- subset(dataForm(), dataForm()$date >= input$dates[1] & dataForm()$date <= input$dates[2])
+```
+
+```{r, echo=FALSE, results = "asis"}
+plotData <- subset(dataForm(), dataForm()$date >= input$dates[1] & dataForm()$date <= input$dates[2])
+spdf <- split(plotData, plotData$siteID)
+spdf <- lapply(spdf, function(x) x[order(x["date"]),])
+beginDate <- as.matrix(as.data.frame(lapply(spdf, function(x) min(x$date, na.rm = TRUE))))[1,]
+endDate <- as.matrix(as.data.frame(lapply(spdf, function(x) max(x$date, na.rm = TRUE))))[1,]
+min <- sapply(spdf, function(x) min(x$level, na.rm = TRUE))
+max <- sapply(spdf, function(x) max(x$level, na.rm = TRUE))
+obs <- sapply(spdf, function(x) nrow(x))
+maxGap <- sapply(spdf, function(x) max(diff(x$date)))
+p10 <- sapply(spdf, function(x) quantile(x$level, 0.1, na.rm = TRUE))
+p50 <- sapply(spdf, function(x) quantile(x$level, 0.5, na.rm = TRUE))
+p90 <- sapply(spdf, function(x) quantile(x$level, 0.9, na.rm = TRUE))
+summary <- data.frame(name = names(max), beginDate, endDate, obs, min, p10,p50,p90,max, maxGap)
+inventory1 <- inventory()[c("SITE_ID", "SITE_NAME")]
+stationStatSummarySelect <- merge(inventory1, summary, by.x = "SITE_ID", by.y = "name")
+names(stationStatSummarySelect) <- c("SID", "name", "beginDate", "endDate", 
+                                     "obs", "min", "p10","p50","p90","max", "maxGap")
+stationStatSummarySelect$SID <- as.integer(stationStatSummarySelect$SID)
+
+stationStatSummarySelectXTable = xtable(stationStatSummarySelect, caption = paste0("Summary statistics of daily data over period ", input$dates[1], " through ", input$dates[2]))
+align(stationStatSummarySelectXTable) = c("p{.8cm}","p{.8cm}","p{3.0cm}","p{2.5cm}","p{2cm}", rep("p{1.1cm}", 7))
+print(stationStatSummarySelectXTable, caption.placement = "top", comment = FALSE, include.rownames = FALSE, scalebox = 0.8)
+```
+
+```{r, echo=FALSE, fig.cap= "Station daily data time series"}
+par(mar = c(2,4,1,0.5))
+plotData <- subset(dataForm(), dataForm()$date >= input$dates[1] & dataForm()$date <= input$dates[2])
+rangePlotData <- max(plotData$level, na.rm = TRUE) - min(plotData$level, na.rm = TRUE)
+firstStation <- plotData[plotData$siteID == sort(unique(plotData$siteID))[1],]
+plot(firstStation$date, firstStation$level, xlim = c(input$dates[1], input$dates[2]), type = "n", 
+     ylim = c(min(plotData$level, na.rm = TRUE), (max(plotData$level, na.rm = TRUE) + rangePlotData/4)),  
+     xlab = "Date", ylab = yAxisLabel(), pch = 2) # paste0("Level (",input$datum,", ft)"), pch = 2)
+for(i in 1:length(unique(plotData$siteID))){
+  d = plotData[plotData$siteID == sort(unique(plotData$siteID))[i],]
+  points(d$date, d$level, pch = i, col = i, cex = 0.5)
+}
+abline(v=pretty(plotData$date),col = "lightgray", lty = "dotted", lwd = par("lwd"))
+abline(h=pretty(plotData$level),col = "lightgray", lty = "dotted", lwd = par("lwd"))
+legend("topleft", 
+       legend = paste(sort(as.numeric(unlist(strsplit(as.character(selStationNames()), ",")))), 
+                      inventory()$SITE_NAME, sep = ", "), 
+       col = seq(1:length(unlist(strsplit(as.character(selStationNames()), ",")))), 
+       pch = seq(1:length(unlist(strsplit(as.character(selStationNames()), ",")))), 
+       merge = FALSE, bty = "n", cex = 0.5)
+```
+
+```{r, echo=FALSE, fig.height=9, fig.cap="Map of station location"}
+library(maptools)
+library(maps)
+library(mapproj)
+map.ylim = c(min(inven()$Lat)-0.5, max(inven()$Lat)+0.5)
+map.xlim = c(min(inven()$Long)-0.5, max(inven()$Long)+0.5)
+map("county", "florida", col =c("gray70"),
+    xlim = map.xlim, ylim = map.ylim, fill = FALSE)
+map("state", xlim = map.xlim, ylim = map.ylim , col ="black", fill = FALSE, add = TRUE)
+for(i in 1:nrow(inven())){
+  points(x = as.vector(inven()$Long[i]), y = as.vector(inven()$Lat[i]), cex = 0.75, pch = i, col = i)
+}
+if(nrow(inven()) == 1){
+  text(x = as.vector(inven()$Long[i]), y = as.vector(inven()$Lat[i]), labels = as.vector(inven()$SITE_NAME[i]), cex = 0.75, pch = i, col = i, pos = 4)
+} else {
+  pointLabel(x = inven()$Long, y = inven()$Lat,
+             labels = inven()$SITE_NAME, col = "black", pos = 4, cex = 0.5, method = "GA")
+}
+# data(us.cities)
+# map.cities(us.cities)
+map.axes()
+```
