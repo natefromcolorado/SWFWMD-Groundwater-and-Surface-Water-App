@@ -21,6 +21,7 @@ GENERATED: `r format(Sys.time(), "%B %d, %Y")`
 
 ```{r, include=FALSE}
 # plotData <- subset(dataForm(), dataForm()$date >= input$dates[1] & dataForm()$date <= input$dates[2])
+# did not use plot data
 ```
 
 ```{r, echo=FALSE, results = "asis"}

@@ -1,4 +1,4 @@
-# title: "Groundwater and Surface Water App"
+# title: "SWFWMD Hydrologic App"
 # author: "Nathan Johnson"
 # date: "2016-02-09"
 # server.R
@@ -52,7 +52,7 @@ shinyServer(function(input, output, session) {
     dt <- as.list(tableDT()$SID)
     names(dt) <- paste(tableDT()$SID, tableDT()$Name, sep = " - ")
     # if(input$datum == "Flow"){
-    selectizeInput("stationName", choices = dt, multiple = TRUE, label = "SID - Station(s)", options = list(placeholder = 'Enter Station - SID (Begin Typing)'))
+    selectizeInput("stationName", choices = dt,  multiple = TRUE, label = "SID - Station(s)", options = list(placeholder = 'Enter Station - SID (Begin Typing)'))#, selected = "25282")
     # } else {selectizeInput("stationName", choices = dt, multiple = TRUE, label = "SID - Station", options = list(placeholder = 'Type Station - SID'),selected = "25282")}
   })
   
@@ -118,7 +118,8 @@ shinyServer(function(input, output, session) {
   
   ## CONVERT CHECKBOX LIST INTO STRING TO BE READ BY ORACLE
   # selStationNames <- eventReactive(input$updateData, {
-  selStationNames <- eventReactive(input$submitButton, {
+  # selStationNames <- eventReactive(input$submitButton, {
+  selStationNames <- reactive({
     validate(
       need(input$inCheckboxGroup != "","Please Enter Station - SID")
     )
@@ -127,6 +128,8 @@ shinyServer(function(input, output, session) {
   
   ## BASIC INVENTORY METADATA
   inventory <- reactive({
+    # if(is.null(input$stationName))
+    #   return(tableDT()[1:1000,])
     # validate(
     #   need(input$stationName != "", "Please Enter Station - SID")
     # )   
@@ -152,17 +155,20 @@ shinyServer(function(input, output, session) {
   
   
   ## LAT AND LONG CONVERTED TO DECIMAL DEGREES FROM WEIRD FORMAT
-  inven = reactive({
+  inven <- reactive({
+    # if(is.null(input$stationName))
+    #   return(tableDT()[1:10,])
+    
     # validate(
     #   need(input$stationName != "", "Please select SID - Station(s)")
     # )   
-    inven = within(inventory(), {
+    inven <- within(inventory(), {
       dms = do.call(rbind, strsplit(as.character(inventory()$LATITUDE_NBR), " "))
       Lat = as.numeric(dms[,1])+(as.numeric(dms[,2]) + as.numeric(dms[,3])/60)/60
       rm(dms)
     })
     
-    inven = within(inven, {
+    inven <- within(inven, {
       dms = do.call(rbind, strsplit(as.character(inven$LONGITUDE_NBR), " "))
       Long = -(as.numeric(dms[,1])+(as.numeric(dms[,2]) + as.numeric(dms[,3])/60)/60)
       rm(dms)
@@ -181,7 +187,7 @@ shinyServer(function(input, output, session) {
   })
   
   ## TIMES SERIES SIMPLY FORMATTED SITEID, DATE, AND LEVEL
-  dataForm = reactive({ # eventReactive(input$submitButton, {
+  dataForm = reactive({ # eventReactive(input$submitButton, { #
     # data <- dbGetQuery(con, paste("SELECT site_dim_id, date_dim_id, recorded_val 
     # FROM resdata.hydrologic_data_daily_agg WHERE site_dim_id IN (",selStationNames(),") AND resource_parameter_dim_id IN (",datum(),")", sep = "")) 
     # input$submitButton
@@ -267,18 +273,15 @@ shinyServer(function(input, output, session) {
                                    "obs", "min", "p10","p50","p90","max", "maxGap")
     stationStatSummary$SID <- as.integer(stationStatSummary$SID)
     stationStatSummary$Link <- sprintf('<a href="http://www18.swfwmd.state.fl.us/ResData/SiteMaintenance/ExtSiteMaintenance.aspx?site=%s"> WMIS</a>', stationStatSummary$SID)
-    # http://bkvvmwmis03p/ResData/SiteMaintenance/SiteMaintenance.aspx?site=25339&ResView=1&Origin=ResSearch
-    # stationStatSummary$Link <- sprintf('<a href="http://bkvvmwmis03p/ResData/SiteMaintenance/SiteMaintenance.aspx?site=%s&ResView=1&Origin=ResSearch"> WMIS</a>', stationStatSummary$SID)
-    # stationWMIS <- data.frame(WMIS = sprintf('<a href="https://www.google.com/#q=%s" target="_blank" class="btn btn-primary">Info</a>',val)
-    # stationStatSummary$WMIS <- sprintf('<a href="http://bkvvmwmis03p/ResData/SiteMaintenance/SiteMaintenance.aspx?site=%s&ResView=1&Origin=ResSearch" target="_blank" class="btn btn-primary">Info</a>',stationStatSummary$SID)
-    # paste0("http://bkvvmwmis03p/ResData/SiteMaintenance/SiteMaintenance.aspx?site=", stationStatSummary$SID ,"&ResView=1&Origin=ResSearch"))
+    # http://bkvvmwmis03p/ResData/SiteMaintenance/SiteMaintenance.aspx?site=25339&ResView=1&Origin=ResSearch 
+    # stationStatSummary$Link <- sprintf('<a href="http://bkvvmwmis03p/ResData/SiteMaintenance/SiteMaintenance.aspx?site=%s&ResView=1&Origin=ResSearch"> WMIS</a>', stationStatSummary$SID) ## for internal WMIS
     stationStatSummary
   })
   
   output$dt <- renderDataTable({
     validate(
       # need(input$stationName != "", "Please select SID - Station(s)"),
-      need(selStationNames() != "", "Please review displayed stations"),
+      # need(selStationNames() != "", "Please review displayed stations"),
       need(strsplit(selStationNames(), ",")[[1]] %in% tableDT()$SID, "Please enter SID - Station")
     )
     return(stationStatSummary())
@@ -369,16 +372,27 @@ shinyServer(function(input, output, session) {
   #              Long >= lngRng[1] & Long <= lngRng[2])
   #   }) # TO DETERMINE THE BOUNDS TO SELECT ALL STATIONS TO BE DISPLAYED IN LEAFLET. D
   
-  dataMapBounds <- reactive({
-    # validate(
-    #   need(input$stationName != "", "Please Enter Station - SID")
-    # ) 
-    latRng <- range(max(inven()$Lat)+5,min(inven()$Lat)-5)
-    lngRng <- range(min(inven()$Long)-5,max(inven()$Long)+5 )
-    subset(tableDT(),
-           Lat >= latRng[1] & Lat <= latRng[2]&
-             Long >= lngRng[1] & Long <= lngRng[2])
-  })  
+  allData <- reactive({
+    subset(tableDT(), 
+           Lat >=0)
+  }) # for some reason the tableDT does not pupulate all the values, so this is a workaround
+  
+  # dataMapBounds <- reactive({
+  #   # if(is.null(selStationNames())){
+  #   #   tableDT()[1:1000,]
+  #   # } else {
+  #   # validate(
+  #   #   need(input$stationName != "", "Please Enter Station - SID")
+  #   # ) 
+  #   latRng <- range(max(inven()$Lat)+5,min(inven()$Lat)-5)
+  #   lngRng <- range(min(inven()$Long)-5,max(inven()$Long)+5 )
+  #   subset(tableDT(),
+  #          Lat >= latRng[1] & Lat <= latRng[2]&
+  #            Long >= lngRng[1] & Long <= lngRng[2])
+  #   # }
+  #   # tableDT()
+  # })  
+  
   
   # dataMapBoundsAll <- reactive({
   #   # validate(
@@ -393,12 +407,6 @@ shinyServer(function(input, output, session) {
   
   # DECIDED TO DISPLAY ALL STATIONS SINCE THE SERVER CANNOT HOST PROXY FUNCTIONS 
   
-  #   observe({
-  #     leafletProxy("myMap", session, data = dataMapBounds()) %>%
-  #       addCircles(color = "black", popup = ~paste(as.character(SID), 
-  #                                                  as.character(Name), sep = ", ")) %>%
-  #       clearShapes()
-  #   }) # THE LEAFLETPROXY FUNCTION DOES NOT WORK ON THE SERVER
   #   
   
   # output$mapAdjacentStations <- renderLeaflet({
@@ -411,85 +419,149 @@ shinyServer(function(input, output, session) {
   # })
   
   output$mymap <- renderLeaflet({
-    # 
-    # if(!exists("input$stationName")){
-    #   map = leaflet(tableDT()) %>%
-    #     fitBounds(lng1 = min(tableDT()$Long, na.rm = TRUE) - 0.01, lng2 = max(tableDT()$Long,na.rm = TRUE) + 0.01,
-    #               lat1 = max(tableDT()$Lat, na.rm = TRUE) + 0.01 , lat2 = min(tableDT()$Lat, na.rm = TRUE) -0.01) %>%
-    #     # addTiles(group = "OSM") %>%
-    #     addProviderTiles("Esri.WorldTopoMap", group = "Topo") %>%
-    #     # addProviderTiles("Esri.WorldImagery", group = "Imagery") %>%
-    #     addCircleMarkers(color = "black", radius = 15,
-    #                      popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
-    #                      stroke = FALSE,
-    #                      layerId = ~as.character(SID),
-    #                      # layerId = 1,
-    #                      # clusterId= 2,
-    #                      # options = markerOptions(draggable = TRUE),
-    #                      clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
-    #     )
-    #   # addLayersControl(
-    #   #   baseGroups = c("OSM","Topo", "Imagery"),
-    #   #   # overlayGroups = c("Quakes", "Outline"),
-    #   #   options = layersControlOptions(collapsed = FALSE)
-    #   # )
-    # 
-    # } else {
-    validate(
-      # need(input$stationName != "", "Please Enter Station - SID")
-      # need(input$inCheckboxGroup != "", "Please review displayed stations")
-      # need(selStationNames() != "", "Please 'Submit'")
-      # need(strsplit(selStationNames(), ",")[[1]] %in% tableDT()$SID, "Please Enter Station 'SID - Station'")
-      # need(strsplit(selStationNames(), ",")[[1]] %in% tableDT()$SID, "Please enter SID - Station")
-    )
-    map = leaflet(dataMapBounds()) %>%
-      fitBounds(lng1 = min(inven()$Long) - 0.01, lng2 = max(inven()$Long) + 0.01,
-      lat1 = max(inven()$Lat) + 0.01 , lat2 = min(inven()$Lat) -0.01) %>% 
+    map <- leaflet(allData()) %>%
+      # fitBounds(lng1 = ~min(Long) - 0.01, lng2 = ~max(Long) + 0.01,
+      # lat1 = ~max(Lat) + 0.01 , lat2 = ~min(Lat) -0.01) %>%
+      # if(input$stationName == "20878")
+      # fitBounds(lng1 = min(inven()$Long) - 0.01, lng2 = max(inven()$Long) + 0.01,
+      # lat1 = max(inven()$Lat) + 0.01 , lat2 = min(inven()$Lat) -0.01) %>%
+      # fitBounds(lng1 = min(tableDT()$Long) - 0.01, lng2 = max(tableDT()$Long) + 0.01,
+      # lat1 = max(tableDT()$Lat) + 0.01 , lat2 = min(tableDT()$Lat) -0.01) %>%
       # addTiles(group = "OpenStreetMap") %>%
       # addTiles(group = "OSM") %>% 
-      addProviderTiles("Esri.WorldTopoMap", group = "Topo") %>%
+      # addPopups(lng = mouseOver()$lng, lat = mouseOver()$lat, popup = "1") %>%
+      # addPopups(lng = dataLeaflet$lng, lat = dataLeaflet$lat, popup = dataLeaflet$id ) %>%
+    addProviderTiles("Esri.WorldTopoMap", group = "Topo") %>%
       addProviderTiles("Esri.WorldImagery", group = "Imagery") %>%
-      addPopups(inven()$Long, inven()$Lat,
-                popup = ~paste(as.character(inven()$SITE_ID),
-                               as.character(inven()$SITE_NAME), sep = " - ")) %>%
-      addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% c("Spring not in Vent", "Spring at Vent")), color = "white", weight = 2, radius = 15, fillColor = "purple", fillOpacity = 0.2,
-                       popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+      
+      addCircleMarkers(data = subset(allData(), allData()$Type %in% c("Spring not in Vent", "Spring at Vent")), color = "white", weight = 2, radius = 15, fillColor = "purple", fillOpacity = 0.2,
+                       # popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
                        stroke = TRUE,
-                       layerId = ~as.character(SID),
+                       layerId = ~paste(as.character(SID),as.character(Name), sep = " - "),
                        group = "Spring",
-                       # options = markerOptions(draggable = TRUE),
+                       options = markerOptions(draggable = TRUE, riseOnHover = TRUE),
                        clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
       ) %>%
-      addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% c("River/Stream", "Canal", "Lake", "Lake Outflow", "Reservoir","Retention Pond","Pond", "Estuary", "Bay/Harbor", "Mine/Mine Discharge","Sinkhole", "Borrow Pit", "Ocean")), color = "white", weight = 2, radius = 15, fillColor = "black", fillOpacity = 0.2,
-                       popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+      addCircleMarkers(data = subset(allData(), allData()$Type %in% c("River/Stream", "Canal", "Lake", "Lake Outflow", "Reservoir","Retention Pond","Pond", "Estuary", "Bay/Harbor", "Mine/Mine Discharge","Sinkhole", "Borrow Pit", "Ocean")), color = "white", weight = 2, radius = 15, fillColor = "black", fillOpacity = 0.2,
+                       # popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
                        stroke = TRUE,
-                       layerId = ~as.character(SID),
+                       layerId = ~paste(as.character(SID),as.character(Name), sep = " - "),
                        group = "Surface Water",
                        clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
       ) %>%
-      addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% c("Well")), color = "white", weight = 2, radius = 15, fillColor = "red", fillOpacity = 0.2,
-                       popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+      addCircleMarkers(data = subset(allData(), allData()$Type %in% c("Well")), color = "white", weight = 2, radius = 15, fillColor = "red", fillOpacity = 0.2,
+                       # popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
                        stroke = TRUE,
-                       layerId = ~as.character(SID), # to access by clicking on marker in map
+                       layerId = ~paste(as.character(SID),as.character(Name), sep = " - "), # to access by clicking on marker in map
                        group = "Groundwater",
                        # options = markerOptions(draggable = TRUE),
                        clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
-      ) %>%
-      addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% "Wetland"), color = "white", weight = 2, radius = 15, fillColor = "darkgreen", fillOpacity = 0.2,
-                       popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
-                       stroke = TRUE,
-                       layerId = ~as.character(SID),
-                       group = "Wetland",
-                       clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
-      ) %>% 
+      ) %>%  
       addLayersControl(
         baseGroups = c("Topo", "Imagery"),
-        overlayGroups = c("Surface Water", "Groundwater","Spring", "Wetland", "Atmospheric"),
-        options = layersControlOptions(collapsed = FALSE)
+        if(datum() == 3){overlayGroups = c("Surface Water","Spring")} else {
+          overlayGroups = c("Surface Water", "Groundwater","Spring", "Wetland")}, #, "Atmospheric"
+        options = layersControlOptions(collapsed = FALSE))
+    if(datum() != "Flow (cfs)"){
+      map <- map %>% addCircleMarkers(data = subset(allData(), allData()$Type %in% "Wetland"), color = "white", weight = 2, radius = 15, fillColor = "darkgreen", fillOpacity = 0.2,
+                                      # popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+                                      stroke = TRUE,
+                                      layerId = ~paste(as.character(SID),as.character(Name), sep = " - "),
+                                      group = "Wetland",
+                                      clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
       )
-    # }
+    }
     map
   })   
+  
+  
+  #!!! output$mymap <- renderLeaflet({
+  # 
+  # if(!exists("input$stationName")){
+  #   map = leaflet(tableDT()) %>%
+  #     fitBounds(lng1 = min(tableDT()$Long, na.rm = TRUE) - 0.01, lng2 = max(tableDT()$Long,na.rm = TRUE) + 0.01,
+  #               lat1 = max(tableDT()$Lat, na.rm = TRUE) + 0.01 , lat2 = min(tableDT()$Lat, na.rm = TRUE) -0.01) %>%
+  #     # addTiles(group = "OSM") %>%
+  #     addProviderTiles("Esri.WorldTopoMap", group = "Topo") %>%
+  #     # addProviderTiles("Esri.WorldImagery", group = "Imagery") %>%
+  #     addCircleMarkers(color = "black", radius = 15,
+  #                      popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+  #                      stroke = FALSE,
+  #                      layerId = ~as.character(SID),
+  #                      # layerId = 1,
+  #                      # clusterId= 2,
+  #                      # options = markerOptions(draggable = TRUE),
+  #                      clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
+  #     )
+  #   # addLayersControl(
+  #   #   baseGroups = c("OSM","Topo", "Imagery"),
+  #   #   # overlayGroups = c("Quakes", "Outline"),
+  #   #   options = layersControlOptions(collapsed = FALSE)
+  #   # )
+  # 
+  # } else {
+  #!!!    validate(
+  # need(input$stationName != "", "Please Enter Station - SID")
+  # need(input$inCheckboxGroup != "", "Please review displayed stations")
+  # need(selStationNames() != "", "Please 'Submit'")
+  # need(strsplit(selStationNames(), ",")[[1]] %in% tableDT()$SID, "Please Enter Station 'SID - Station'")
+  #!!!      need(strsplit(selStationNames(), ",")[[1]] %in% tableDT()$SID, "Please enter SID - Station")
+  #!!!   )
+  #!!!   map <- leaflet(dataMapBounds()) %>%
+  # fitBounds(lng1 = ~min(Long) - 0.01, lng2 = ~max(Long) + 0.01,
+  # lat1 = ~max(Lat) + 0.01 , lat2 = ~min(Lat) -0.01) %>%
+  # if(input$stationName == "20878")
+  #!!!     fitBounds(lng1 = min(inven()$Long) - 0.01, lng2 = max(inven()$Long) + 0.01,
+  #!!!             lat1 = max(inven()$Lat) + 0.01 , lat2 = min(inven()$Lat) -0.01) %>%
+  # fitBounds(lng1 = min(tableDT()$Long) - 0.01, lng2 = max(tableDT()$Long) + 0.01,
+  # lat1 = max(tableDT()$Lat) + 0.01 , lat2 = min(tableDT()$Lat) -0.01) %>%
+  # addTiles(group = "OpenStreetMap") %>%
+  # addTiles(group = "OSM") %>% 
+  # addPopups(lng = mouseOver()$lng, lat = mouseOver()$lat, popup = "1") %>%
+  # addPopups(lng = dataLeaflet$lng, lat = dataLeaflet$lat, popup = dataLeaflet$id ) %>%
+  #!!!    addProviderTiles("Esri.WorldTopoMap", group = "Topo") %>%
+  #   addProviderTiles("Esri.WorldImagery", group = "Imagery") %>%
+  #   addPopups(inven()$Long, inven()$Lat,
+  #             popup = ~paste(as.character(inven()$SITE_ID),
+  #                            as.character(inven()$SITE_NAME), sep = " - ")) %>%
+  #   addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% c("Spring not in Vent", "Spring at Vent")), color = "white", weight = 2, radius = 15, fillColor = "purple", fillOpacity = 0.2,
+  #                    popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+  #                    stroke = TRUE,
+  #                    layerId = ~as.character(SID),
+  #                    group = "Spring",
+  #                    options = markerOptions(draggable = TRUE, riseOnHover = TRUE),
+  #                    clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
+  #   ) %>%
+  #   addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% c("River/Stream", "Canal", "Lake", "Lake Outflow", "Reservoir","Retention Pond","Pond", "Estuary", "Bay/Harbor", "Mine/Mine Discharge","Sinkhole", "Borrow Pit", "Ocean")), color = "white", weight = 2, radius = 15, fillColor = "black", fillOpacity = 0.2,
+  #                    popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+  #                    stroke = TRUE,
+  #                    layerId = ~as.character(SID),
+  #                    group = "Surface Water",
+  #                    clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
+  #   ) %>%
+  #   addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% c("Well")), color = "white", weight = 2, radius = 15, fillColor = "red", fillOpacity = 0.2,
+  #                    popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+  #                    stroke = TRUE,
+  #                    layerId = ~as.character(SID), # to access by clicking on marker in map
+  #                    group = "Groundwater",
+  #                    # options = markerOptions(draggable = TRUE),
+  #                    clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
+  #   ) %>%
+  #   addCircleMarkers(data = subset(dataMapBounds(), dataMapBounds()$Type %in% "Wetland"), color = "white", weight = 2, radius = 15, fillColor = "darkgreen", fillOpacity = 0.2,
+  #                    popup = ~paste(as.character(SID),as.character(Name), sep = " - "),
+  #                    stroke = TRUE,
+  #                    layerId = ~as.character(SID),
+  #                    group = "Wetland",
+  #                    clusterOptions = markerClusterOptions(maxClusterRadius = 0.01, zoomToBoundsOnClick = TRUE)
+  #   ) %>%
+  #   addLayersControl(
+  #     baseGroups = c("Topo", "Imagery"),
+  #     overlayGroups = c("Surface Water", "Groundwater","Spring", "Wetland", "Atmospheric"),
+  #     options = layersControlOptions(collapsed = FALSE)
+  #   )
+  # # }
+  # map
+  #!!!  })   
   
   # icon <- file.path("L:/Hydro Eval/Staff/Nathan/R/scripts/waterleveldashboard - app/app/circle.png")
   # addMarkers(
@@ -506,114 +578,178 @@ shinyServer(function(input, output, session) {
   
   
   # data <- reactiveValues(clickedMarker=NULL)
-  
-  observeEvent(input$mymap_marker_click,{
-    # data$clickedMarker <- input$mymap_marker_click
-    dt <- as.list(tableDT()$SID)
-    names(dt) <- paste(tableDT()$SID, tableDT()$Name, sep = " - ")
-    click <- input$mymap_marker_click
-    
-    updateSelectizeInput(session, "stationName", choices = dt, selected = c(input$stationName, click$id), label = "SID - Station(s)", options = list(placeholder = 'Enter Station - SID (Begin Typing)'))
-    # renderDataTable(tableDT()[tableDT()$SID == click$id,])}
-    # output$site <- renderDataTable(data.frame(Long = round(click$lng,5), Lat = round(click$lat,5)))}#, ID = click$id))}
-  })
-  # observeEvent(input$mymap_click,{
-  #   data$clickedMarker <- NULL
-  #   output$site <- renderDataTable(data$clickedMarker)}
-  #   )
-  
-  # 
-  # site <- eventReactive(input$mymap_marker_click,{
-  #   date <- input$mymap_marker_click
-  # })
-  # site <- renderDataTable(as.data.frame(site))
-  # observeEvent(input$map_click,{
-  #   data$clickedMarker <- NULL
-  #   print(data$clickedMarker)})
-  
-  ## FIGURE OF SCATTERPLOT MATRIX
-  # output$scatter <- renderPlot({
-  #   cr = dcast(dataForm(), date~siteID, value.var = "level", mean)
-  #   dataset <- cr[,-1] 
-  #   colnames(dataset) <- inventory()[inventory()$SITE_ID %in% colnames(dataset),]$SITE_NAME
-  #   pairs(dataset[1:ncol(dataset)])  
-  # })
-  
-  ## CORRELATION MATRIX TABLE
-  # output$corMatrix <- renderDataTable({
-  #   cr <- dcast(dataForm(), date~siteID, value.var = "level", mean)
-  #   dataset <- cr[,-1] 
-  #   colnames(dataset) <- inventory()[inventory()$SITE_ID %in% colnames(dataset),]$SITE_NAME
-  #   cor <- round(cor(dataset, use = "pairwise.complete.obs"),2)
-  #   cor <- data.frame(Name = row.names(cor), cor)
-  # }, options = list(searching = FALSE, paging = FALSE))
-  # 
-  ## INTERACTIVE TIME SERIES FROM JAVASCRIPT DYGRAPH PACKAGE
-  # data <- reactiveValues(clickedMarker=NULL)
-  # 
   # selected_site = eventReactive(input$mymap_marker_click,{
   #   event <- input$mymap_marker_click
   #   return(tableDT()[tableDT()$Long == event$lng,]) # & tableDT()$Lat == event$lat
   # })
-  # 
-  # site <- renderDataTable(selected_site)
-  yAxisLabel <- reactive ({
-    if(input$datum == "Level (NGVD29)"){
-      yAxisLabel = "Level (NGVD29 ft)"
-    } else if(input$datum == "Level (NAVD88)"){
-      yAxisLabel = "Level (NAVD88 ft)"
-    } else {
-      yAxisLabel = "Flow (cfs)"
-    }
+  # dataLeaflet <- reactiveValues(mouseOver=list(id = "801582", nonce = 0.08816478,  lat = 28.53724, lng = -82.433))
+  # dataLeaflet <- reactiveValues(id = input$mymap_marker_mouseover["id"], input$mymap_marker_mouseover["nonce"],  input$mymap_marker_mouseover["lat"], input$mymap_marker_mouseover["lng"])
+  
+  # mouseOver <- eventReactive(input$mymap_marker_mouseover,{
+  #   dataLeaflet$mouseOver <- input$mymap_marker_mouseover
+  # })
+  
+  #!!!!!!!!!!!!!!!!!!!
+  
+  observeEvent(input$mymap_marker_mouseover, {
+    offset = isolate((input$mymap_bounds$north - input$mymap_bounds$south) / (20-input$mymap_zoom)^2)
+    leafletProxy("mymap") %>%
+      addPopups(lat = input$mymap_marker_mouseover$lat + offset, lng = input$mymap_marker_mouseover$lng, paste0(as.character(input$mymap_marker_mouseover$id), "<br/>", "(Click Circle to add)"), layerId = input$mymap_marker_mouseover$id)
   })
-  output$dygraph = renderDygraph({
-    validate(
-      # need(input$stationName != "", "Please select SID - Station(s)"),
-      # need(input$inCheckboxGroup != "", "Please review displayed stations"),
-      # need(strsplit(selStationNames(), ",") %in% tableDT()$SID, "check this"),
-      need(selStationNames() != "", "Please 'Submit'"),
-      need(strsplit(selStationNames(), ",")[[1]] %in% tableDT()$SID, "Please enter SID - Station")
-    )
-    
-    minLevel <- min(dataForm()$level, na.rm = TRUE)
-    maxLevel <- max(dataForm()$level, na.rm = TRUE)
-    crossTab = dcast(dataForm(), date~siteID, value.var = "level", mean)
-    colnames(crossTab) <- c("date", inventory()[inventory()$SITE_ID %in% 
-                                                  colnames(crossTab),]$SITE_NAME)
-    row.names(crossTab) = crossTab$date
-    xtsDataForm = as.xts(crossTab)
-    dygraph(xtsDataForm) %>% 
-      dyRangeSelector(fillColor = "", strokeColor = "") %>%
-      dyAxis("y", label = yAxisLabel(), valueRange = c(minLevel, maxLevel)) %>%
-      # dyAxis("y", label = paste0("Level (",input$datum, "ft)"), valueRange = c(minLevel, maxLevel)) %>% 
-      dyLegend(show = "auto", width= 600)
+  
+  h <- NULL
+  observeEvent(input$mymap_marker_mouseout, {
+    h <- c(input$mymap_marker_mouseout$id, h)
+    leafletProxy("mymap", session) %>%
+      # clearPopups()
+      removePopup(layerId = h)
     
   })
   
-  ## DOWNLOAD BUTTON
-  output$downloadReport <- downloadHandler(
-    filename = function() {
-      paste('my-report', sep = '.', switch(
-        input$format, PDF = 'pdf', HTML = 'html', Word = 'docx'
-      ))
-    },
+  
+  observeEvent(selStationNames(),{
+    proxy <- leafletProxy("mymap", session)
+    proxy %>% clearPopups()
+    proxy %>% addPopups(inven()$Long, inven()$Lat,
+                        popup = paste(as.character(inven()$SITE_ID),
+                                      as.character(inven()$SITE_NAME), sep = " - "))
+    proxy %>% fitBounds(lng1 = min(inven()$Long) - 0.01, lng2 = max(inven()$Long) + 0.01,
+                        lat1 = max(inven()$Lat) + 0.01 , lat2 = min(inven()$Lat) -0.01)
+  })
     
-    content = function(file) {
-      src <- normalizePath('stationWaterLevelReport.Rmd')
+    #!!!!!!!!!!!!!!!!!!  
+    
+    # observeEvent(input$mymap_marker_mouseover$id, {
+    #   mouseOver <- input$mymap_marker_mouseover$id
+    #   leafletProxy("mymap", session) %>%
+    #     addPopups(lng = mouseOver$lng, lat = mouseOver$lat, popup = mouseOver$id)
+    #     # addPopups(lng = dataLeaflet$lng, lat = dataLeaflet$lat, popup = dataLeaflet$id)
+    # })
+    # 
+    
+    # dataLeaflet <- reactiveValues(id = "801582", nonce = 0.08816478,  lat = 28.53724, lng = -82.433)
+    # observeEvent(input$mymap_marker_mouseover,{
+    # dataLeaflet <- input$mymap_marker_mouseover
+    # print(dataLeaflet)
+    # })
+    
+    # observeEvent(input$submitButton,{
+    #   updateTabsetPanel(session, "tabsetId", selected = "Time Series")
+    # })
+    
+    observeEvent(input$mymap_marker_click,{
+      # data$clickedMarker <- input$mymap_marker_click
+      dt <- as.list(tableDT()$SID)
+      names(dt) <- paste(tableDT()$SID, tableDT()$Name, sep = " - ")
+      click <- input$mymap_marker_click
+      updateSelectizeInput(session, "stationName", choices = dt, selected = c(input$stationName, strsplit(click$id, " ")[[1]][1]), label = "SID - Station(s)", options = list(placeholder = 'Enter Station - SID (Begin Typing)'))
+      # leafletProxy("mymap", session) %>%
+      # clearPopups() %>%
+      # addPopups(click$lng, click$lat,
+      # popup = click$id)
+      # fitBounds(lng1 = min(inven()$Long) - 0.01, lng2 = max(inven()$Long) + 0.01,
+      # lat1 = max(inven()$Lat) + 0.01 , lat2 = min(inven()$Lat) -0.01)
+      # })
+      # renderDataTable(tableDT()[tableDT()$SID == click$id,])}
+      # output$site <- renderDataTable(data.frame(Long = round(click$lng,5), Lat = round(click$lat,5)))}#, ID = click$id))}
+    })
+    # observeEvent(input$mymap_click,{
+    #   data$clickedMarker <- NULL
+    #   output$site <- renderDataTable(data$clickedMarker)}
+    #   )
+    
+    # 
+    # site <- eventReactive(input$mymap_marker_click,{
+    #   date <- input$mymap_marker_click
+    # })
+    # site <- renderDataTable(as.data.frame(site))
+    # observeEvent(input$map_click,{
+    #   data$clickedMarker <- NULL
+    #   print(data$clickedMarker)})
+    
+    ## FIGURE OF SCATTERPLOT MATRIX
+    # output$scatter <- renderPlot({
+    #   cr = dcast(dataForm(), date~siteID, value.var = "level", mean)
+    #   dataset <- cr[,-1] 
+    #   colnames(dataset) <- inventory()[inventory()$SITE_ID %in% colnames(dataset),]$SITE_NAME
+    #   pairs(dataset[1:ncol(dataset)])  
+    # })
+    
+    ## CORRELATION MATRIX TABLE
+    # output$corMatrix <- renderDataTable({
+    #   cr <- dcast(dataForm(), date~siteID, value.var = "level", mean)
+    #   dataset <- cr[,-1] 
+    #   colnames(dataset) <- inventory()[inventory()$SITE_ID %in% colnames(dataset),]$SITE_NAME
+    #   cor <- round(cor(dataset, use = "pairwise.complete.obs"),2)
+    #   cor <- data.frame(Name = row.names(cor), cor)
+    # }, options = list(searching = FALSE, paging = FALSE))
+    # 
+    ## INTERACTIVE TIME SERIES FROM JAVASCRIPT DYGRAPH PACKAGE
+    # data <- reactiveValues(clickedMarker=NULL)
+    # 
+    # selected_site = eventReactive(input$mymap_marker_click,{
+    #   event <- input$mymap_marker_click
+    #   return(tableDT()[tableDT()$Long == event$lng,]) # & tableDT()$Lat == event$lat
+    # })
+    # 
+    # site <- renderDataTable(selected_site)
+    yAxisLabel <- reactive ({
+      if(input$datum == "Level (NGVD29)"){
+        yAxisLabel = "Level (NGVD29 ft)"
+      } else if(input$datum == "Level (NAVD88)"){
+        yAxisLabel = "Level (NAVD88 ft)"
+      } else {
+        yAxisLabel = "Flow (cfs)"
+      }
+    })
+    
+    output$dygraph = renderDygraph({
+      validate(
+        # need(input$stationName != "", "Please select SID - Station(s)"),
+        # need(input$inCheckboxGroup != "", "Please review displayed stations"),
+        # need(strsplit(selStationNames(), ",") %in% tableDT()$SID, "check this"),
+        need(selStationNames() != "", "Please 'Submit'"),
+        need(strsplit(selStationNames(), ",")[[1]] %in% tableDT()$SID, "Please enter SID - Station")
+      )
+      minLevel <- min(dataForm()$level, na.rm = TRUE)
+      maxLevel <- max(dataForm()$level, na.rm = TRUE)
+      crossTab = dcast(dataForm(), date~siteID, value.var = "level", mean)
+      colnames(crossTab) <- c("date", inventory()[inventory()$SITE_ID %in% 
+                                                    colnames(crossTab),]$SITE_NAME)
+      row.names(crossTab) = crossTab$date
+      xtsDataForm = as.xts(crossTab)
+      dygraph(xtsDataForm) %>% 
+        dyRangeSelector(fillColor = "", strokeColor = "") %>%
+        dyAxis("y", label = yAxisLabel(), valueRange = c(minLevel, maxLevel)) %>%
+        # dyAxis("y", label = paste0("Level (",input$datum, "ft)"), valueRange = c(minLevel, maxLevel)) %>% 
+        dyLegend(show = "auto", width= 600)
       
-      # temporarily switch to the temp dir, in case you do not have write
-      # permission to the current working directory
-      owd <- setwd(tempdir())
-      on.exit(setwd(owd))
-      file.copy(src, 'stationWaterLevelReport.Rmd')
+    })
+    
+    ## DOWNLOAD BUTTON
+    output$downloadReport <- downloadHandler(
+      filename = function() {
+        paste('my-report', sep = '.', switch(
+          input$format, PDF = 'pdf', HTML = 'html', Word = 'docx'
+        ))
+      },
       
-      out <- render('stationWaterLevelReport.Rmd', switch(
-        input$format,
-        PDF = pdf_document(fig_caption = TRUE, fig_width = 7, fig_height = 3.5), 
-        HTML = html_document(), 
-        Word = word_document()
-      ))
-      file.rename(out, file)
-    }
-  )
+      content = function(file) {
+        src <- normalizePath('stationReport.Rmd')
+        
+        # temporarily switch to the temp dir, in case you do not have write
+        # permission to the current working directory
+        owd <- setwd(tempdir())
+        on.exit(setwd(owd))
+        file.copy(src, 'stationReport.Rmd')
+        
+        out <- render('stationReport.Rmd', switch(
+          input$format,
+          PDF = pdf_document(fig_caption = TRUE, fig_width = 7, fig_height = 3.5), 
+          HTML = html_document(), 
+          Word = word_document()
+        ))
+        file.rename(out, file)
+      }
+    )
 })
